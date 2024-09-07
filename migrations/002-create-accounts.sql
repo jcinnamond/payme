@@ -1,0 +1,5 @@
+CREATE TABLE accounts (
+  id UUID PRIMARY KEY NOT NULL,
+  name VARCHAR,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL
+);

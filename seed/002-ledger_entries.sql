@@ -1,0 +1,3 @@
+INSERT INTO ledger_entries(id, amount, datetime, account_id) VALUES (gen_random_uuid(), 110, now(), '2e0240df-7403-4243-8514-fba8b6f83528');
+INSERT INTO ledger_entries(id, amount, datetime, account_id) VALUES (gen_random_uuid(), -20, now(), '2e0240df-7403-4243-8514-fba8b6f83528');
+INSERT INTO ledger_entries(id, amount, datetime, account_id) VALUES (gen_random_uuid(), 187, now(), 'd639a6af-89f5-452a-8f22-34ea1808d2fd');

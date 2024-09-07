@@ -1,0 +1,2 @@
+INSERT INTO accounts (id, name, created_at) VALUES ('2e0240df-7403-4243-8514-fba8b6f83528', 'Test Account 1', NOW());
+INSERT INTO accounts (id, name, created_at) VALUES ('d639a6af-89f5-452a-8f22-34ea1808d2fd', 'Test Account 2', NOW());
