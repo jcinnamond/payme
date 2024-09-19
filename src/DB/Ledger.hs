@@ -15,13 +15,13 @@ import Hasql.Statement (Statement)
 import Hasql.TH qualified as TH
 import Ledger (LedgerEntry (..))
 
-list :: Connection -> IO (Either Session.SessionError [LedgerEntry])
-list = Session.run listSession
+list :: Connection -> UUID -> IO (Either Session.SessionError [LedgerEntry])
+list conn accountId = Session.run (listSession accountId) conn
 
-listSession :: Session [LedgerEntry]
-listSession = Session.statement () listStatement
+listSession :: UUID -> Session [LedgerEntry]
+listSession accountId = Session.statement accountId listStatement
 
-listStatement :: Statement () [LedgerEntry]
+listStatement :: Statement UUID [LedgerEntry]
 listStatement =
   rmap
     (\v -> Vector.toList $ toLedgerEntry <$> v)
@@ -32,6 +32,8 @@ listStatement =
         datetime :: timestamptz, 
         account_id :: uuid
       from "ledger_entries"
+      where
+        account_id = $1 :: uuid
       |]
 
 toLedgerEntry :: (UUID, Int64, UTCTime, UUID) -> LedgerEntry

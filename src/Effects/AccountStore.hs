@@ -7,24 +7,27 @@ module Effects.AccountStore (
   GetAccountError,
 ) where
 
-import Account (Account)
+import Account (Account (..))
+import AccountWithLedger (AccountWithLedger (..))
 import DB.Accounts qualified as AccountDB
 import Data.Aeson (ToJSON)
 import Data.UUID (UUID)
 import Effectful (Dispatch (..), DispatchOf, Eff, Effect, IOE, liftIO, (:>))
 import Effectful.Dispatch.Dynamic (HasCallStack, interpret, send)
+import Effects.LedgerStore (LedgerStore)
+import Effects.LedgerStore qualified as LedgerStore
 import GHC.Generics (Generic)
 import Hasql.Connection (Connection)
 
 data AccountStore :: Effect where
-  GetAccount :: UUID -> AccountStore m (Either GetAccountError (Maybe Account))
+  GetAccount :: UUID -> AccountStore m (Either GetAccountError AccountWithLedger)
 
 type instance DispatchOf AccountStore = Dynamic
 
 getAccount ::
-  (HasCallStack, AccountStore :> es) =>
+  (HasCallStack, AccountStore :> es, LedgerStore :> es) =>
   UUID ->
-  Eff es (Either GetAccountError (Maybe Account))
+  Eff es (Either GetAccountError AccountWithLedger)
 getAccount = send . GetAccount
 
 newtype GetAccountError = GetAccountError String
@@ -32,14 +35,29 @@ newtype GetAccountError = GetAccountError String
   deriving anyclass (ToJSON)
 
 runAccountStoreIO ::
-  (IOE :> es) =>
+  (IOE :> es, LedgerStore :> es) =>
   Connection ->
   Eff (AccountStore : es) a ->
   Eff es a
 runAccountStoreIO conn = interpret $ \_ -> \case
-  GetAccount uuid ->
-    mapSessionError GetAccountError
-      <$> liftIO (AccountDB.get conn uuid)
+  GetAccount uuid -> do
+    account <- liftIO (AccountDB.get conn uuid)
+    case account of
+      Left err -> pure $ Left $ GetAccountError $ show err
+      Right acc -> addLedger acc
 
-mapSessionError :: (Show a) => (String -> c) -> Either a b -> Either c b
-mapSessionError f = either (Left . f . show) Right
+addLedger ::
+  (IOE :> es, LedgerStore :> es) =>
+  Account ->
+  Eff es (Either GetAccountError AccountWithLedger)
+addLedger acc = do
+  ledger <- LedgerStore.loadLedger acc.id
+  pure $
+    mapResult
+      (GetAccountError . show)
+      (AccountWithLedger acc)
+      ledger
+
+mapResult :: (a -> c) -> (b -> d) -> Either a b -> Either c d
+mapResult f _ (Left x) = Left $ f x
+mapResult _ f (Right x) = Right $ f x

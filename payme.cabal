@@ -29,6 +29,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Account
+    AccountWithLedger
     API
     Config
     DB.Accounts

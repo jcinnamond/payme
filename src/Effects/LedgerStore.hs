@@ -11,6 +11,7 @@ module Effects.LedgerStore (
 
 import DB.Ledger qualified as LedgerDB
 import Data.Aeson (ToJSON)
+import Data.UUID (UUID)
 import Effectful (Dispatch (..), DispatchOf, Eff, Effect, IOE, MonadIO (liftIO), (:>))
 import Effectful.Dispatch.Dynamic (HasCallStack, interpret, send)
 import GHC.Generics (Generic)
@@ -18,15 +19,16 @@ import Hasql.Connection (Connection)
 import Ledger (LedgerEntry)
 
 data LedgerStore :: Effect where
-  LoadLedger :: LedgerStore m (Either LoadLedgerError [LedgerEntry])
+  LoadLedger :: UUID -> LedgerStore m (Either LoadLedgerError [LedgerEntry])
   CreateLedgerEntry :: LedgerEntry -> LedgerStore m (Either CreateLedgerError LedgerEntry)
 
 type instance DispatchOf LedgerStore = Dynamic
 
 loadLedger ::
   (HasCallStack, LedgerStore :> es) =>
+  UUID ->
   Eff es (Either LoadLedgerError [LedgerEntry])
-loadLedger = send LoadLedger
+loadLedger = send . LoadLedger
 
 createLedgerEntry ::
   (LedgerStore :> es) =>
@@ -48,9 +50,9 @@ runLedgerStoreIO ::
   Eff (LedgerStore : es) a ->
   Eff es a
 runLedgerStoreIO conn = interpret $ \_ -> \case
-  LoadLedger ->
+  LoadLedger accountId ->
     mapSessionError LoadLedgerError
-      <$> liftIO (LedgerDB.list conn)
+      <$> liftIO (LedgerDB.list conn accountId)
   CreateLedgerEntry ledgerEntry ->
     mapSessionError CreateLedgerError
       <$> liftIO (LedgerDB.create conn ledgerEntry)
