@@ -41,5 +41,3 @@ get' name = do
     Just x -> Right x
     Nothing -> Left $ MissingVariable name
 
--- >>> get "HOME" :: IO (Either Error Double)
--- Left (InvalidValue Double "HOME" "/home/john")

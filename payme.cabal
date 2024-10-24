@@ -40,24 +40,28 @@ library
     Env
     Ledger
     Logger
+    Migrations
     Money
 
   build-depends:
-    , aeson           ^>=2.2.3.0
-    , effectful       ^>=2.3.1.0
-    , effectful-th    ^>=1.0.0.2
-    , exceptions      ^>=0.10.7
-    , hasql           ^>=1.8
-    , hasql-th        ^>=0.4.0.22
-    , mtl             ^>=2.3.1
-    , profunctors     ^>=5.6.2
-    , resource-pool   ^>=0.4.0.0
-    , servant         ^>=0.20.1
-    , servant-server  ^>=0.20
-    , time            ^>=1.12
-    , uuid            ^>=1.3.15
-    , vector          ^>=0.13.1.0
-    , warp            ^>=3.4.1
+    , aeson              ^>=2.2.3.0
+    , bytestring         ^>=0.12.1.0
+    , effectful          ^>=2.3.1.0
+    , effectful-th       ^>=1.0.0.2
+    , exceptions         ^>=0.10.7
+    , hasql              ^>=1.8
+    , hasql-migration    ^>=0.3.1
+    , hasql-th           ^>=0.4.0.22
+    , hasql-transaction  ^>=1.1.1.2
+    , mtl                ^>=2.3.1
+    , profunctors        ^>=5.6.2
+    , resource-pool      ^>=0.4.0.0
+    , servant            ^>=0.20.1
+    , servant-server     ^>=0.20
+    , time               ^>=1.12
+    , uuid               ^>=1.3.15
+    , vector             ^>=0.13.1.0
+    , warp               ^>=3.4.1
 
 executable payme
   import:         shared
@@ -88,7 +92,13 @@ test-suite test-payme
   main-is:            Spec.hs
   build-tool-depends: hspec-discover:hspec-discover >=2 && <3
   build-depends:
-    , hspec  ^>=2.11.9
+    , hasql     ^>=1.8
+    , hasql-th  ^>=0.4.0.22
+    , hspec     ^>=2.11.9
     , payme
+    , time      ^>=1.12
+    , uuid      ^>=1.3.15
 
-  other-modules:      EnvSpec
+  other-modules:
+    BalanceSpec
+    EnvSpec

@@ -3,12 +3,12 @@
 module Main where
 
 import API qualified
-import Config (loadConfig)
+import Config (load)
 import DB.Connection qualified as DB
 
 main :: IO ()
 main = do
-  configResult <- loadConfig
+  configResult <- load
   let config = case configResult of
         Left err -> error $ "error loading config: " <> show err
         Right c -> c

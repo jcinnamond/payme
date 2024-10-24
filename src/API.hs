@@ -1,11 +1,12 @@
 module API (run) where
 
+import Account (Account)
 import AccountWithLedger (AccountWithLedger (..))
 import Control.Monad.Except (ExceptT (..))
+import Data.ByteString.Lazy.Char8 qualified as BSC
 import Data.Proxy (Proxy (..))
-import Data.Text (Text)
-import Data.Text qualified as T
 import Data.UUID (UUID)
+import Data.Vector (Vector)
 import Effectful (Eff, IOE, runEff)
 import Effectful qualified as Eff
 import Effectful.Error.Static qualified as Static
@@ -17,7 +18,19 @@ import GHC.Generics (Generic)
 import Hasql.Connection (Connection)
 import Logger qualified
 import Network.Wai.Handler.Warp qualified as Warp
-import Servant (Capture, Handler (..), NamedRoutes, ServerError, ServerT, hoistServer, serve, (:-), (:>))
+import Servant (
+  Capture,
+  Handler (..),
+  NamedRoutes,
+  ServerError (..),
+  ServerT,
+  err404,
+  err500,
+  hoistServer,
+  serve,
+  (:-),
+  (:>),
+ )
 import Servant.API (Get, JSON)
 import Servant.Server (Application)
 
@@ -32,11 +45,9 @@ type MyApp =
 
 type API = NamedRoutes AccountAPI
 
-newtype AccountAPI mode = AccountAPI
-  { get ::
-      mode
-        :- Capture "account id" UUID
-          :> Get '[JSON] (Either Text AccountWithLedger)
+data AccountAPI mode = AccountAPI
+  { list :: mode :- Get '[JSON] (Vector Account)
+  , get :: mode :- Capture "account id" UUID :> Get '[JSON] AccountWithLedger
   }
   deriving stock (Generic)
 
@@ -44,30 +55,43 @@ server ::
   ( Logger.Logger Eff.:> es
   , AccountStore Eff.:> es
   , LedgerStore Eff.:> es
+  , Static.Error ServerError Eff.:> es
   ) =>
   ServerT API (Eff es)
 server =
   AccountAPI
-    { get = handleGetAccount
+    { list = handleListAccounts
+    , get = handleGetAccount
     }
+
+handleListAccounts ::
+  ( Logger.Logger Eff.:> es
+  , AccountStore Eff.:> es
+  , Static.Error ServerError Eff.:> es
+  ) =>
+  Eff es (Vector Account)
+handleListAccounts = do
+  Logger.info "listing accounts"
+  accs <- AccountStore.listAccounts
+  case accs of
+    Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
+    Right x -> pure x
 
 handleGetAccount ::
   ( Logger.Logger Eff.:> es
   , AccountStore Eff.:> es
   , LedgerStore Eff.:> es
+  , Static.Error ServerError Eff.:> es
   ) =>
   UUID ->
-  Eff es (Either Text AccountWithLedger)
+  Eff es AccountWithLedger
 handleGetAccount uuid = do
   Logger.info "getting account"
-  mapLeft tshow <$> AccountStore.getAccount uuid
-
-mapLeft :: (a -> c) -> Either a b -> Either c b
-mapLeft f (Left x) = Left $ f x
-mapLeft _ (Right x) = Right x
-
-tshow :: (Show a) => a -> Text
-tshow = T.pack . show
+  acc <- AccountStore.getAccount uuid
+  case acc of
+    Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
+    Right (Just x) -> pure x
+    Right Nothing -> Static.throwError err404
 
 nt :: Connection -> MyApp a -> Handler a
 nt conn = do

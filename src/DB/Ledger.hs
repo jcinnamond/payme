@@ -40,25 +40,38 @@ toLedgerEntry :: (UUID, Int64, UTCTime, UUID) -> LedgerEntry
 toLedgerEntry (uuid, amount, datetime, account_id) =
   LedgerEntry uuid amount datetime account_id
 
-create :: Connection -> LedgerEntry -> IO (Either Session.SessionError LedgerEntry)
+create :: Connection -> LedgerEntry -> IO (Either Session.SessionError ())
 create conn le = Session.run (createSession le) conn
 
-createSession :: LedgerEntry -> Session LedgerEntry
+createSession :: LedgerEntry -> Session ()
 createSession le = Session.statement le createStatement
 
-createStatement :: Statement LedgerEntry LedgerEntry
+createStatement :: Statement LedgerEntry ()
 createStatement =
-  dimap
+  lmap
     (\le -> (le.id, le.amount, le.datetime, le.account_id))
-    ( \(uuid, amount, datetime, account_id) ->
-        LedgerEntry uuid amount datetime account_id
-    )
-    [TH.singletonStatement|
+    [TH.resultlessStatement|
       insert into "ledger_entries" 
         values ($1 :: uuid, $2 :: int8, $3 :: timestamptz, $4 :: uuid)
-      returning 
+      |]
+
+get :: Connection -> UUID -> IO (Either Session.SessionError LedgerEntry)
+get conn ledgerId = Session.run (getSession ledgerId) conn
+
+getSession :: UUID -> Session LedgerEntry
+getSession ledgerId = Session.statement ledgerId getStatement
+
+getStatement :: Statement UUID LedgerEntry
+getStatement =
+  rmap
+    toLedgerEntry
+    [TH.singletonStatement|
+      select 
         id :: uuid, 
         amount :: int8, 
         datetime :: timestamptz, 
         account_id :: uuid
+      from "ledger_entries"
+      where
+        id = $1 :: uuid
       |]

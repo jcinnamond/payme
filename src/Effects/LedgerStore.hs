@@ -20,7 +20,7 @@ import Ledger (LedgerEntry)
 
 data LedgerStore :: Effect where
   LoadLedger :: UUID -> LedgerStore m (Either LoadLedgerError [LedgerEntry])
-  CreateLedgerEntry :: LedgerEntry -> LedgerStore m (Either CreateLedgerError LedgerEntry)
+  CreateLedgerEntry :: LedgerEntry -> LedgerStore m (Either CreateLedgerError ())
 
 type instance DispatchOf LedgerStore = Dynamic
 
@@ -33,7 +33,7 @@ loadLedger = send . LoadLedger
 createLedgerEntry ::
   (LedgerStore :> es) =>
   LedgerEntry ->
-  Eff es (Either CreateLedgerError LedgerEntry)
+  Eff es (Either CreateLedgerError ())
 createLedgerEntry = send . CreateLedgerEntry
 
 newtype LoadLedgerError = LoadLedgerError String

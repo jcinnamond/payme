@@ -9,3 +9,14 @@ services:
     ports:
       - "5432:5432"
     restart: always
+
+  postgrestest:
+    container_name: postgrestest
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=paymetest
+      - POSTGRES_PASSWORD=paymetest
+      - POSTGRES_DB=paymetest
+    ports:
+      - "5433:5432"
+    restart: always
