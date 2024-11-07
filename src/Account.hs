@@ -10,7 +10,7 @@ import Data.UUID (UUID)
 import GHC.Generics (Generic)
 
 data Account = Account
-  { id :: UUID
+  { uuid :: UUID
   , name :: Text
   , balance :: Int64
   , createdAt :: UTCTime

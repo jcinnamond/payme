@@ -49,7 +49,7 @@ createSession le = Session.statement le createStatement
 createStatement :: Statement LedgerEntry ()
 createStatement =
   lmap
-    (\le -> (le.id, le.amount, le.datetime, le.account_id))
+    (\le -> (le.uuid, le.amount, le.datetime, le.accountId))
     [TH.resultlessStatement|
       insert into "ledger_entries" 
         values ($1 :: uuid, $2 :: int8, $3 :: timestamptz, $4 :: uuid)

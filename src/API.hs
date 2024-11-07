@@ -4,6 +4,7 @@ import Account (Account)
 import AccountWithLedger (AccountWithLedger (..))
 import Control.Monad.Except (ExceptT (..))
 import Data.ByteString.Lazy.Char8 qualified as BSC
+import Data.Int (Int64)
 import Data.Proxy (Proxy (..))
 import Data.UUID (UUID)
 import Data.Vector (Vector)
@@ -22,6 +23,7 @@ import Servant (
   Capture,
   Handler (..),
   NamedRoutes,
+  Post,
   ServerError (..),
   ServerT,
   err404,
@@ -48,6 +50,8 @@ type API = NamedRoutes AccountAPI
 data AccountAPI mode = AccountAPI
   { list :: mode :- Get '[JSON] (Vector Account)
   , get :: mode :- Capture "account id" UUID :> Get '[JSON] AccountWithLedger
+  , deposit :: mode :- Capture "account id" UUID :> "deposit" :> Capture "amount" Int64 :> Post '[JSON] AccountWithLedger
+  , withdraw :: mode :- Capture "account id" UUID :> "withdraw" :> Capture "amount" Int64 :> Post '[JSON] AccountWithLedger
   }
   deriving stock (Generic)
 
@@ -62,7 +66,29 @@ server =
   AccountAPI
     { list = handleListAccounts
     , get = handleGetAccount
+    , deposit = handleAccountDeposit
+    , withdraw = \accountId amount -> handleAccountDeposit accountId (-amount)
     }
+
+handleAccountDeposit ::
+  ( Logger.Logger Eff.:> es
+  , AccountStore Eff.:> es
+  , Static.Error ServerError Eff.:> es
+  ) =>
+  UUID ->
+  Int64 ->
+  Eff es AccountWithLedger
+handleAccountDeposit uuid amount = do
+  Logger.info "depositing money"
+  res <- AccountStore.deposit uuid amount
+  case res of
+    Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
+    Right () -> do
+      acc <- AccountStore.getAccount uuid
+      case acc of
+        Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
+        Right (Just x) -> pure x
+        Right Nothing -> Static.throwError err404
 
 handleListAccounts ::
   ( Logger.Logger Eff.:> es

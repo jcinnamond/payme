@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 module BalanceSpec (spec) where
@@ -31,32 +32,43 @@ spec = do
         _ <- deposit conn acc 10
         _ <- deposit conn acc 50
 
-        (Right acc') <- AccountsDB.get conn acc.id
+        (Right acc') <- AccountsDB.get conn acc.uuid
         acc'.balance `shouldBe` 60
 
       it "creates a ledger entry" $ \(conn, acc) -> do
         uuid <- deposit conn acc 10
 
         (Right le) <- LedgerDB.get conn uuid
-        le.id `shouldBe` uuid
+        le.uuid `shouldBe` uuid
         le.amount `shouldBe` 10
-        le.account_id `shouldBe` acc.id
+        le.accountId `shouldBe` acc.uuid
 
     describe "withdrawing money" $ do
       it "updates the account balance" $ \(conn, acc) -> do
         _ <- deposit conn acc 50
         _ <- withdraw conn acc 10
 
-        (Right acc') <- AccountsDB.get conn acc.id
+        (Right acc') <- AccountsDB.get conn acc.uuid
         acc'.balance `shouldBe` 40
 
       it "creates a ledger entry" $ \(conn, acc) -> do
+        _ <- deposit conn acc 50
         uuid <- withdraw conn acc 10
 
         (Right le) <- LedgerDB.get conn uuid
-        le.id `shouldBe` uuid
+        le.uuid `shouldBe` uuid
         le.amount `shouldBe` -10
-        le.account_id `shouldBe` acc.id
+        le.accountId `shouldBe` acc.uuid
+
+      it "does not allow the account to go overdrawn" $ \(conn, acc) -> do
+        uuid <- V4.nextRandom
+        datetime <- getCurrentTime
+        let accountId = acc.uuid
+            amount = -10
+            le = LedgerEntry{..}
+
+        depositRes <- AccountsDB.deposit conn acc.uuid le
+        depositRes `shouldBe` Left AccountsDB.InsufficientFunds
 
 withDatabase :: ((Hasql.Connection, Account) -> IO ()) -> IO ()
 withDatabase = do
@@ -111,7 +123,7 @@ deposit conn acc amount = do
   createdAt <- getCurrentTime
   let (Right le) = mkCredit acc ledgerUUID amount createdAt
 
-  depositRes <- AccountsDB.deposit conn acc le
+  depositRes <- AccountsDB.deposit conn acc.uuid le
   depositRes `shouldBe` Right ()
   pure ledgerUUID
 
@@ -121,6 +133,6 @@ withdraw conn acc amount = do
   createdAt <- getCurrentTime
   let (Right le) = mkDebit acc ledgerUUID (-amount) createdAt
 
-  depositRes <- AccountsDB.deposit conn acc le
+  depositRes <- AccountsDB.deposit conn acc.uuid le
   depositRes `shouldBe` Right ()
   pure ledgerUUID

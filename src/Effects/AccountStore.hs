@@ -1,9 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Effects.AccountStore (
   AccountStore (..),
   getAccount,
   listAccounts,
+  deposit,
   runAccountStoreIO,
   Error,
 ) where
@@ -12,37 +15,32 @@ import Account (Account (..))
 import AccountWithLedger (AccountWithLedger (..))
 import DB.Accounts qualified as AccountDB
 import Data.Aeson (ToJSON)
+import Data.Int (Int64)
+import Data.Time (getCurrentTime)
 import Data.UUID (UUID)
+import Data.UUID.V4 qualified as V4
 import Data.Vector (Vector)
-import Effectful (Dispatch (..), DispatchOf, Eff, Effect, IOE, liftIO, (:>))
-import Effectful.Dispatch.Dynamic (HasCallStack, interpret, send)
+import Effectful (Eff, Effect, IOE, liftIO, (:>))
+import Effectful.Dispatch.Dynamic (interpret)
+import Effectful.TH (makeEffect)
 import Effects.LedgerStore (LedgerStore)
 import Effects.LedgerStore qualified as LedgerStore
 import GHC.Generics (Generic)
 import Hasql.Connection (Connection)
-import Hasql.Session qualified as HasqlSession
+import Ledger (LedgerEntry (..))
+
+data Error
+  = SessionError String
+  | InsufficientFunds
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON)
 
 data AccountStore :: Effect where
   GetAccount :: UUID -> AccountStore m (Either Error (Maybe AccountWithLedger))
   ListAccounts :: AccountStore m (Either Error (Vector Account))
+  Deposit :: UUID -> Int64 -> AccountStore m (Either Error ())
 
-type instance DispatchOf AccountStore = Dynamic
-
-getAccount ::
-  (HasCallStack, AccountStore :> es, LedgerStore :> es) =>
-  UUID ->
-  Eff es (Either Error (Maybe AccountWithLedger))
-getAccount = send . GetAccount
-
-listAccounts ::
-  (HasCallStack, AccountStore :> es) =>
-  Eff es (Either Error (Vector Account))
-listAccounts = send ListAccounts
-
-newtype Error
-  = SessionError String
-  deriving stock (Show, Generic)
-  deriving anyclass (ToJSON)
+makeEffect ''AccountStore
 
 runAccountStoreIO ::
   (IOE :> es, LedgerStore :> es) =>
@@ -53,26 +51,34 @@ runAccountStoreIO conn = interpret $ \_ -> \case
   GetAccount uuid -> do
     account <- liftIO (AccountDB.get conn uuid)
     case account of
-      Left err
-        | isNotFound err -> pure $ Right Nothing
-        | otherwise -> pure $ Left $ SessionError $ show err
+      Left AccountDB.NotFound -> pure $ Right Nothing
+      Left err -> pure $ Left $ SessionError $ show err
       Right acc -> addLedger acc
   ListAccounts -> do
     account <- liftIO (AccountDB.list conn)
     case account of
       Left err -> pure $ Left $ SessionError $ show err
       Right accs -> pure $ Right accs
+  Deposit accountId amount -> do
+    convertError
+      <$> liftIO
+        ( do
+            uuid <- V4.nextRandom
+            datetime <- getCurrentTime
+            let le = LedgerEntry{..}
+            AccountDB.deposit conn accountId le
+        )
 
-isNotFound :: HasqlSession.SessionError -> Bool
-isNotFound (HasqlSession.QueryError _ _ (HasqlSession.ResultError (HasqlSession.UnexpectedAmountOfRows 0))) = True
-isNotFound _ = False
+convertError :: Either AccountDB.AccountDBError () -> Either Error ()
+convertError (Left err) = Left $ SessionError $ show err
+convertError (Right ()) = pure ()
 
 addLedger ::
   (IOE :> es, LedgerStore :> es) =>
   Account ->
   Eff es (Either Error (Maybe AccountWithLedger))
 addLedger acc = do
-  ledger <- LedgerStore.loadLedger acc.id
+  ledger <- LedgerStore.loadLedger acc.uuid
   pure $
     mapResult
       (SessionError . show)
