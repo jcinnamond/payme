@@ -15,9 +15,11 @@ import Effects.AccountStore (AccountStore)
 import Effects.AccountStore qualified as AccountStore
 import Effects.LedgerStore (LedgerStore)
 import Effects.LedgerStore qualified as LedgerStore
+import Effects.Log (Log)
+import Effects.Log qualified as Log
 import GHC.Generics (Generic)
 import Hasql.Connection (Connection)
-import Logger qualified
+import Logger (Logger)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant (
   Capture,
@@ -41,7 +43,7 @@ type MyApp =
     '[ Static.Error ServerError
      , AccountStore
      , LedgerStore
-     , Logger.Logger
+     , Log
      , IOE
      ]
 
@@ -56,7 +58,7 @@ data AccountAPI mode = AccountAPI
   deriving stock (Generic)
 
 server ::
-  ( Logger.Logger Eff.:> es
+  ( Log Eff.:> es
   , AccountStore Eff.:> es
   , LedgerStore Eff.:> es
   , Static.Error ServerError Eff.:> es
@@ -71,7 +73,7 @@ server =
     }
 
 handleAccountDeposit ::
-  ( Logger.Logger Eff.:> es
+  ( Log Eff.:> es
   , AccountStore Eff.:> es
   , Static.Error ServerError Eff.:> es
   ) =>
@@ -79,7 +81,7 @@ handleAccountDeposit ::
   Int64 ->
   Eff es AccountWithLedger
 handleAccountDeposit uuid amount = do
-  Logger.info "depositing money"
+  Log.info "depositing money"
   res <- AccountStore.deposit uuid amount
   case res of
     Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
@@ -91,20 +93,20 @@ handleAccountDeposit uuid amount = do
         Right Nothing -> Static.throwError err404
 
 handleListAccounts ::
-  ( Logger.Logger Eff.:> es
+  ( Log Eff.:> es
   , AccountStore Eff.:> es
   , Static.Error ServerError Eff.:> es
   ) =>
   Eff es (Vector Account)
 handleListAccounts = do
-  Logger.info "listing accounts"
+  Log.info "listing accounts"
   accs <- AccountStore.listAccounts
   case accs of
     Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
     Right x -> pure x
 
 handleGetAccount ::
-  ( Logger.Logger Eff.:> es
+  ( Log Eff.:> es
   , AccountStore Eff.:> es
   , LedgerStore Eff.:> es
   , Static.Error ServerError Eff.:> es
@@ -112,19 +114,19 @@ handleGetAccount ::
   UUID ->
   Eff es AccountWithLedger
 handleGetAccount uuid = do
-  Logger.info "getting account"
+  Log.info "getting account"
   acc <- AccountStore.getAccount uuid
   case acc of
     Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
     Right (Just x) -> pure x
     Right Nothing -> Static.throwError err404
 
-nt :: Connection -> MyApp a -> Handler a
-nt conn = do
+nt :: Connection -> Logger -> MyApp a -> Handler a
+nt conn logger = do
   Handler
     . ExceptT
     . runEff
-    . Logger.runLogger
+    . Log.runLog logger
     . LedgerStore.runLedgerStoreIO conn
     . AccountStore.runAccountStoreIO conn
     . Static.runErrorNoCallStack
@@ -132,8 +134,8 @@ nt conn = do
 proxy :: Proxy API
 proxy = Proxy
 
-app :: Connection -> Application
-app connection = serve proxy $ hoistServer proxy (nt connection) server
+app :: Connection -> Logger -> Application
+app connection logger = serve proxy $ hoistServer proxy (nt connection logger) server
 
-run :: Connection -> IO ()
-run connection = Warp.run 8080 (app connection)
+run :: Connection -> Logger -> IO ()
+run connection logger = Warp.run 8080 (app connection logger)

@@ -5,6 +5,7 @@ module Main where
 import API qualified
 import Config (load)
 import DB.Connection qualified as DB
+import Logger qualified
 
 main :: IO ()
 main = do
@@ -14,10 +15,11 @@ main = do
         Right c -> c
 
   hasqlConnection <- DB.connection config
+  let logger = Logger.appLogger "payme"
   case hasqlConnection of
     Left err -> print err
     Right conn -> do
-      API.run conn
+      API.run conn logger
 
 -- TIO.putStrLn $ (T.pack . show) config
 

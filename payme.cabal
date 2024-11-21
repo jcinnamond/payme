@@ -37,6 +37,7 @@ library
     DB.Ledger
     Effects.AccountStore
     Effects.LedgerStore
+    Effects.Log
     Env
     Ledger
     Logger

@@ -1,49 +1,22 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Logger (
-  Logger (..),
-  runLogger,
-  logStr,
-  info,
-) where
+  Logger,
+  appLogger,
+  withField,
+)
+where
 
+import Data.Aeson (ToJSON)
+import Data.Aeson.Key qualified as Key
+import Data.Aeson.Types qualified as JSON
 import Data.Text (Text)
-import Data.Text qualified as Text
-import Data.Text.IO qualified as TIO
-import Effectful (Dispatch (..), DispatchOf, Eff, Effect, IOE, MonadIO (liftIO), (:>))
-import Effectful.Dispatch.Dynamic (HasCallStack, interpret, send)
 
-data Logger :: Effect where
-  Info :: Text -> Logger m ()
-  LogStr :: Text -> Logger m ()
+newtype Logger = Logger [JSON.Pair]
 
-type instance DispatchOf Logger = Dynamic
+instance ToJSON Logger where
+  toJSON (Logger l) = JSON.object l
 
-logStr :: (HasCallStack, Logger :> es) => Text -> Eff es ()
-logStr s = send $ LogStr s
+appLogger :: Text -> Logger
+appLogger name = Logger [("app_name", JSON.String name)]
 
-info :: (Logger :> es) => Text -> Eff es ()
-info = send . Info
-
-runLogger ::
-  (IOE :> es) =>
-  Eff (Logger : es) a ->
-  Eff es a
-runLogger = interpret $ \_ -> \case
-  LogStr s -> liftIO $ TIO.putStrLn $ "log: " <> s
-  Info s ->
-    liftIO $
-      TIO.putStrLn $
-        mkLog
-          [ ("level", "info")
-          , ("message", s)
-          ]
-
-mkLog :: [(Text, Text)] -> Text
-mkLog elems = "{" <> Text.intercalate "," (map f elems) <> "}"
- where
-  f :: (Text, Text) -> Text
-  f (k, v) = quote k <> "=" <> quote v
-
-  quote :: Text -> Text
-  quote x = "\"" <> x <> "\""
+withField :: (ToJSON a) => Logger -> Text -> a -> Logger
+withField (Logger l) k v = Logger $ (Key.fromText k, JSON.toJSON v) : l
