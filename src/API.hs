@@ -6,6 +6,7 @@ import Control.Monad.Except (ExceptT (..))
 import Data.ByteString.Lazy.Char8 qualified as BSC
 import Data.Int (Int64)
 import Data.Proxy (Proxy (..))
+import Data.Text qualified as T
 import Data.UUID (UUID)
 import Data.Vector (Vector)
 import Effectful (Eff, IOE, runEff)
@@ -19,7 +20,7 @@ import Effects.Log (Log)
 import Effects.Log qualified as Log
 import GHC.Generics (Generic)
 import Hasql.Connection (Connection)
-import Logger (Logger)
+import Logger (Logger, (.=))
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant (
   Capture,
@@ -81,14 +82,18 @@ handleAccountDeposit ::
   Int64 ->
   Eff es AccountWithLedger
 handleAccountDeposit uuid amount = do
-  Log.info "depositing money"
+  logger <- Log.withFields ["payment_id" .= uuid]
+  Log.info logger "depositing money"
+
   res <- AccountStore.deposit uuid amount
   case res of
     Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
     Right () -> do
       acc <- AccountStore.getAccount uuid
       case acc of
-        Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
+        Left err -> do
+          Log.error logger $ T.pack $ show err
+          Static.throwError $ err500{errBody = BSC.pack $ show err}
         Right (Just x) -> pure x
         Right Nothing -> Static.throwError err404
 
@@ -99,7 +104,9 @@ handleListAccounts ::
   ) =>
   Eff es (Vector Account)
 handleListAccounts = do
-  Log.info "listing accounts"
+  logger <- Log.baseLogger
+  Log.info logger "listing accounts"
+
   accs <- AccountStore.listAccounts
   case accs of
     Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}
@@ -114,7 +121,9 @@ handleGetAccount ::
   UUID ->
   Eff es AccountWithLedger
 handleGetAccount uuid = do
-  Log.info "getting account"
+  logger <- Log.withFields ["payment_id" .= uuid]
+  Log.info logger "getting account"
+
   acc <- AccountStore.getAccount uuid
   case acc of
     Left err -> Static.throwError $ err500{errBody = BSC.pack $ show err}

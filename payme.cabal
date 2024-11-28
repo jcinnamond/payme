@@ -93,6 +93,8 @@ test-suite test-payme
   main-is:            Spec.hs
   build-tool-depends: hspec-discover:hspec-discover >=2 && <3
   build-depends:
+    , aeson     ^>=2.2.3.0
+    , aeson-qq  ^>=0.8.4
     , hasql     ^>=1.8
     , hasql-th  ^>=0.4.0.22
     , hspec     ^>=2.11.9
@@ -103,3 +105,4 @@ test-suite test-payme
   other-modules:
     BalanceSpec
     EnvSpec
+    LoggerSpec

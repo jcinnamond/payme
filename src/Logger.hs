@@ -1,7 +1,12 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module Logger (
   Logger,
+  LogField,
   appLogger,
-  withField,
+  withFields,
+  emptyLogger,
+  (.=),
 )
 where
 
@@ -15,8 +20,20 @@ newtype Logger = Logger [JSON.Pair]
 instance ToJSON Logger where
   toJSON (Logger l) = JSON.object l
 
+emptyLogger :: Logger
+emptyLogger = Logger []
+
 appLogger :: Text -> Logger
 appLogger name = Logger [("app_name", JSON.String name)]
 
-withField :: (ToJSON a) => Logger -> Text -> a -> Logger
-withField (Logger l) k v = Logger $ (Key.fromText k, JSON.toJSON v) : l
+data LogField = forall a. (ToJSON a) => LogField Text a
+
+withFields :: Logger -> [LogField] -> Logger
+withFields (Logger pairs) fields = Logger $ pairs <> (toPair <$> fields)
+ where
+  toPair :: LogField -> JSON.Pair
+  toPair (LogField k v) = (Key.fromText k, JSON.toJSON v)
+
+(.=) :: forall a. (ToJSON a) => Text -> a -> LogField
+(.=) = LogField
+infixr 8 .=
