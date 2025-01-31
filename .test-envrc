@@ -1,1 +1,0 @@
-export PAYME_TEST_DB_CONNECTION="host='localhost' port=5433 dbname='paymetest' user='paymetest' password='paymetest'"

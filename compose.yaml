@@ -5,7 +5,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PW}
-      - POSTGRES_DB=${POSTGRES_DB} #optional (specify default database instead of $POSTGRES_DB)
+      - POSTGRES_DB=${POSTGRES_DB} 
     ports:
       - "5432:5432"
     restart: always
@@ -14,9 +14,9 @@ services:
     container_name: postgrestest
     image: postgres:latest
     environment:
-      - POSTGRES_USER=paymetest
-      - POSTGRES_PASSWORD=paymetest
-      - POSTGRES_DB=paymetest
+      - POSTGRES_USER=${POSTGRES_TEST_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_TEST_PW}
+      - POSTGRES_DB=${POSTGRES_TEST_DB} 
     ports:
       - "5433:5432"
     restart: always
